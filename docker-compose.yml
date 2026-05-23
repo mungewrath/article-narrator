@@ -1,0 +1,25 @@
+services:
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.12
+    container_name: article-audio-elasticmq
+    restart: unless-stopped
+    ports:
+      - "9324:9324"
+    volumes:
+      - ./docker/elasticmq/elasticmq.conf:/opt/elasticmq.conf
+    command:
+      - /opt/elasticmq.conf
+
+  article-sqs-bridge:
+    build:
+      context: .
+    container_name: article-sqs-bridge
+    restart: unless-stopped
+    depends_on:
+      - elasticmq
+    env_file:
+      - ./config/article-sqs-bridge.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./var/jobs:/data/jobs
