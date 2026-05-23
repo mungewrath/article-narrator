@@ -8,6 +8,7 @@ Initial local implementation for the home-lab side of the article-to-podcast pip
 - local durable job directories under `ARTICLE_AUDIO_JOBS_ROOT`
 - optional local handoff command that must succeed before the SQS message is deleted
 - Docker Compose service for the SQS bridge
+- Prefect server and worker services for local orchestration
 - host bridge support for reaching a fish TTS process running on the same machine
 
 ## Job directory layout
@@ -36,10 +37,11 @@ This keeps the durable local receipt marker in place before any later worker or 
 
 ```bash
 cp config/article-sqs-bridge.env.example config/article-sqs-bridge.env
+cp config/prefect.env.example config/prefect.env
 mkdir -p var/jobs
 ```
 
-Update the copied env file with real values before starting services.
+Update the copied env files with real values before starting services.
 
 ## Docker Compose
 
@@ -47,6 +49,14 @@ Update the copied env file with real values before starting services.
 mkdir -p var/jobs
 docker compose up --build -d
 ```
+
+This starts:
+
+- `elasticmq` for local SQS-compatible testing
+- `article-sqs-bridge`
+- `prefect-server` on `http://localhost:4200`
+- `prefect-worker`
+- `prefect-bootstrap`, which creates the work pool and registers the demo deployment
 
 To watch logs:
 
@@ -124,7 +134,32 @@ article-sqs-bridge --once
 ## Host fish TTS bridge
 
 The bridge container adds `host.docker.internal` via Docker's `host-gateway` mapping.
-That gives future worker code a stable way to reach a fish TTS server running directly on the host machine, for example `http://host.docker.internal:8080`.
+That gives future worker code a stable way to reach a fish TTS server running directly on the host machine, for example `http://host.docker.internal:8888`.
+
+## Prefect
+
+The local Prefect UI is available at `http://localhost:4200`.
+
+The Compose stack registers a demo deployment named `hello-world-tts/hello-world-tts`.
+It runs through the Prefect worker, calls the host fish server at `http://host.docker.internal:8888/v1/tts`, and writes the generated audio under `var/jobs/prefect-demo/`.
+
+Trigger the demo deployment from the repo root:
+
+```bash
+./scripts/run-prefect-hello-tts.sh
+```
+
+Or override the text:
+
+```bash
+./scripts/run-prefect-hello-tts.sh "Hello from Prefect and Fish Speech"
+```
+
+Watch the worker logs while the deployment runs:
+
+```bash
+docker compose logs -f prefect-worker prefect-bootstrap prefect-server
+```
 
 ## Notes
 

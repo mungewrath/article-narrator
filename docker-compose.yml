@@ -23,3 +23,71 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./var/jobs:/data/jobs
+
+  prefect-server:
+    build:
+      context: .
+    container_name: article-audio-prefect-server
+    restart: unless-stopped
+    command:
+      - prefect
+      - server
+      - start
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4200"
+    ports:
+      - "4200:4200"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=5)
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  prefect-bootstrap:
+    build:
+      context: .
+    container_name: article-audio-prefect-bootstrap
+    restart: "no"
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    env_file:
+      - ./config/prefect.env
+    command:
+      - /app/docker/prefect/bootstrap.sh
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - ./var/jobs:/data/jobs
+
+  prefect-worker:
+    build:
+      context: .
+    container_name: article-audio-prefect-worker
+    restart: unless-stopped
+    depends_on:
+      prefect-server:
+        condition: service_healthy
+    env_file:
+      - ./config/prefect.env
+    command:
+      - prefect
+      - worker
+      - start
+      - --pool
+      - article-audio
+      - --type
+      - process
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - ./var/jobs:/data/jobs
