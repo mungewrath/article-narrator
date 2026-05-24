@@ -67,7 +67,7 @@ def check_fish_tts_health() -> str:
 
 
 @task
-def synthesize_audio(text: str, title: str, audio_format: str = "wav") -> str:
+def synthesize_audio(text: str, title: str, audio_format: str = "mp3") -> str:
     output_dir = _fish_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -88,7 +88,7 @@ def synthesize_audio(text: str, title: str, audio_format: str = "wav") -> str:
 
 
 @task
-def synthesize_hello_world(text: str, audio_format: str = "wav") -> str:
+def synthesize_hello_world(text: str, audio_format: str = "mp3") -> str:
     output_dir = _fish_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
 
