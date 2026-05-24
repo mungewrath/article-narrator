@@ -10,6 +10,8 @@ import ormsgpack
 import requests
 from prefect import flow, get_run_logger, task
 
+from article_audio.podcast import EpisodeResult, PodcastConfig, place_episode
+
 
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -65,6 +67,27 @@ def check_fish_tts_health() -> str:
 
 
 @task
+def synthesize_audio(text: str, title: str, audio_format: str = "wav") -> str:
+    output_dir = _fish_output_dir()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in title.lower()).strip(
+        "-"
+    )[:80]
+    output_path = output_dir / f"{slug}-{_utc_timestamp()}.{audio_format}"
+    response = requests.post(
+        _fish_tts_url(),
+        params={"format": "msgpack"},
+        data=_fish_request_payload(text, audio_format),
+        headers=_fish_request_headers(),
+        timeout=600,
+    )
+    response.raise_for_status()
+    output_path.write_bytes(response.content)
+    return str(output_path)
+
+
+@task
 def synthesize_hello_world(text: str, audio_format: str = "wav") -> str:
     output_dir = _fish_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -97,12 +120,59 @@ def hello_world_tts(text: str = "Hello from Prefect and Fish Speech") -> dict[st
     }
 
 
+@flow(name="article-to-podcast", log_prints=True)
+def article_to_podcast(
+    text: str,
+    title: str = "Untitled Article",
+    description: str = "",
+) -> dict[str, Any]:
+    logger = get_run_logger()
+    logger.info("Starting article-to-podcast for: %s", title)
+
+    health = check_fish_tts_health()
+    logger.info("Fish TTS health: %s", health)
+
+    audio_path = synthesize_audio(text, title)
+    logger.info("Synthesized audio: %s", audio_path)
+
+    result = place_episode(
+        audio_source=Path(audio_path),
+        title=title,
+        description=description,
+    )
+    logger.info(
+        "Placed episode in podcast: %s (title=%s)",
+        result.audio_path,
+        result.episode_title,
+    )
+
+    return {
+        "status": "ok",
+        "audio_path": audio_path,
+        "episode_path": result.audio_path,
+        "episode_title": result.episode_title,
+        "podcast": os.getenv("ABS_PODCAST_NAME", "articles"),
+    }
+
+
 def deploy_hello_world_tts() -> None:
     hello_world_tts.from_source(
         source=str(Path("/app")),
         entrypoint="src/article_audio/prefect_flows.py:hello_world_tts",
     ).deploy(
         name="hello-world-tts",
+        work_pool_name=os.getenv("PREFECT_WORK_POOL_NAME", "article-audio"),
+        build=False,
+        push=False,
+    )
+
+
+def deploy_article_to_podcast() -> None:
+    article_to_podcast.from_source(
+        source=str(Path("/app")),
+        entrypoint="src/article_audio/prefect_flows.py:article_to_podcast",
+    ).deploy(
+        name="article-to-podcast",
         work_pool_name=os.getenv("PREFECT_WORK_POOL_NAME", "article-audio"),
         build=False,
         push=False,
@@ -116,12 +186,27 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_parser = subparsers.add_parser("deploy-hello")
     deploy_parser.set_defaults(handler=lambda _args: deploy_hello_world_tts())
 
+    deploy_article_parser = subparsers.add_parser("deploy-article")
+    deploy_article_parser.set_defaults(
+        handler=lambda _args: deploy_article_to_podcast()
+    )
+
     run_parser = subparsers.add_parser("run-hello")
     run_parser.add_argument(
         "--text",
         default=os.getenv("PREFECT_HELLO_TEXT", "Hello from Prefect and Fish Speech"),
     )
     run_parser.set_defaults(handler=lambda args: hello_world_tts(text=args.text))
+
+    run_article_parser = subparsers.add_parser("run-article")
+    run_article_parser.add_argument("--text", required=True)
+    run_article_parser.add_argument("--title", default="Untitled Article")
+    run_article_parser.add_argument("--description", default="")
+    run_article_parser.set_defaults(
+        handler=lambda args: article_to_podcast(
+            text=args.text, title=args.title, description=args.description
+        )
+    )
     return parser
 
 

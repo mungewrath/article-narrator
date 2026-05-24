@@ -1,4 +1,18 @@
 services:
+  audiobookshelf:
+    image: ghcr.io/advplyr/audiobookshelf
+    container_name: article-audio-abs
+    restart: unless-stopped
+    ports:
+      - "13378:80"
+    volumes:
+      - ./var/audiobookshelf/config:/config
+      - ./var/audiobookshelf/metadata:/metadata
+      - ./var/audiobookshelf/audiobooks:/audiobooks
+      - ./var/audiobookshelf/podcasts:/podcasts
+    environment:
+      - TZ=America/Los_Angeles
+
   elasticmq:
     image: softwaremill/elasticmq-native:1.6.12
     container_name: article-audio-elasticmq
@@ -67,6 +81,7 @@ services:
     volumes:
       - .:/app
       - ./var/jobs:/data/jobs
+      - ./var/audiobookshelf/podcasts:/podcasts
 
   prefect-worker:
     build:
@@ -91,3 +106,4 @@ services:
     volumes:
       - .:/app
       - ./var/jobs:/data/jobs
+      - ./var/audiobookshelf/podcasts:/podcasts
