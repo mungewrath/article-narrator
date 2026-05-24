@@ -27,3 +27,5 @@ prefect work-pool inspect "$PREFECT_WORK_POOL_NAME" >/dev/null 2>&1 || \
 python -m article_audio.prefect_flows deploy-hello
 
 python -m article_audio.prefect_flows deploy-article
+
+python -m article_audio.prefect_flows deploy-url

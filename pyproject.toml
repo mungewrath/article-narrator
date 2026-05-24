@@ -13,6 +13,7 @@ dependencies = [
   "ormsgpack>=1.5.0",
   "prefect>=3.0,<4.0",
   "requests>=2.32.0",
+  "trafilatura>=2.0.0",
 ]
 
 [project.scripts]

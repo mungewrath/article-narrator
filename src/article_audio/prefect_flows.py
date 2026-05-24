@@ -10,6 +10,7 @@ import ormsgpack
 import requests
 from prefect import flow, get_run_logger, task
 
+from article_audio.extractor import Article, fetch_article
 from article_audio.podcast import EpisodeResult, PodcastConfig, place_episode
 
 
@@ -39,6 +40,10 @@ def _fish_request_headers() -> dict[str, str]:
     return headers
 
 
+def _max_new_tokens() -> int:
+    return int(os.getenv("FISH_TTS_MAX_NEW_TOKENS", "4096"))
+
+
 def _fish_request_payload(text: str, audio_format: str) -> bytes:
     payload: dict[str, Any] = {
         "text": text,
@@ -46,7 +51,7 @@ def _fish_request_payload(text: str, audio_format: str) -> bytes:
         "reference_id": None,
         "format": audio_format,
         "latency": "normal",
-        "max_new_tokens": 1024,
+        "max_new_tokens": _max_new_tokens(),
         "chunk_length": 200,
         "top_p": 0.8,
         "repetition_penalty": 1.1,
@@ -155,6 +160,26 @@ def article_to_podcast(
     }
 
 
+@task
+def extract_article(url: str) -> Article:
+    return fetch_article(url)
+
+
+@flow(name="url-to-podcast", log_prints=True)
+def url_to_podcast(url: str) -> dict[str, Any]:
+    logger = get_run_logger()
+    logger.info("Fetching article from: %s", url)
+
+    article = extract_article(url)
+    logger.info("Extracted: %s (%d chars)", article.title, len(article.text or ""))
+
+    return article_to_podcast(
+        text=article.text or "",
+        title=article.title or "Untitled Article",
+        description=article.description,
+    )
+
+
 def deploy_hello_world_tts() -> None:
     hello_world_tts.from_source(
         source=str(Path("/app")),
@@ -179,6 +204,18 @@ def deploy_article_to_podcast() -> None:
     )
 
 
+def deploy_url_to_podcast() -> None:
+    url_to_podcast.from_source(
+        source=str(Path("/app")),
+        entrypoint="src/article_audio/prefect_flows.py:url_to_podcast",
+    ).deploy(
+        name="url-to-podcast",
+        work_pool_name=os.getenv("PREFECT_WORK_POOL_NAME", "article-audio"),
+        build=False,
+        push=False,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Prefect flow helpers")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -190,6 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     deploy_article_parser.set_defaults(
         handler=lambda _args: deploy_article_to_podcast()
     )
+
+    deploy_url_parser = subparsers.add_parser("deploy-url")
+    deploy_url_parser.set_defaults(handler=lambda _args: deploy_url_to_podcast())
 
     run_parser = subparsers.add_parser("run-hello")
     run_parser.add_argument(
@@ -207,6 +247,10 @@ def build_parser() -> argparse.ArgumentParser:
             text=args.text, title=args.title, description=args.description
         )
     )
+
+    run_url_parser = subparsers.add_parser("run-url")
+    run_url_parser.add_argument("--url", required=True)
+    run_url_parser.set_defaults(handler=lambda args: url_to_podcast(url=args.url))
     return parser
 
 
