@@ -1,15 +1,59 @@
-# Article Audio
+# Article Narrator
 
-Initial local implementation for the home-lab side of the article-to-podcast pipeline.
+Pipeline that converts web articles into podcast episodes using a self-hosted TTS server (Fish Speech).
 
-## Included
+```
+User pastes URL to Frontend → SQS → Prefect processes the rest as a job (article extraction via trafilatura → chunked TTS (Fish Speech) → ffmpeg merge → ABS podcast episode)
+```
 
-- `article-sqs-bridge` Python CLI that long-polls SQS
-- local durable job directories under `ARTICLE_AUDIO_JOBS_ROOT`
-- optional local handoff command that must succeed before the SQS message is deleted
-- Docker Compose service for the SQS bridge
-- Prefect server and worker services for local orchestration
-- host bridge support for reaching a fish TTS process running on the same machine
+This repo contains:
+- **Static frontend** for submitting URLs via browser
+- **Terraform** for deploying the AWS infrastructure
+- **Docker compose** backend which is intended to be self-hosted
+
+## Architecture
+
+```
+┌──────────────┐  browser   ┌──────────────────┐
+│  Frontend     │───────────▶│  API Gateway      │
+│ (S3/CF, SPA)  │◀──────────│  Cognito auth     │
+└──────────────┘   tokens   └────────┬─────────┘
+                                     │ SQS SendMessage
+                            ┌────────▼─────────┐
+                            │  SQS Queue        │
+                            │  (+ DLQ)          │
+                            └────────┬─────────┘
+                                     │ long-poll
+                                     │
+                            ┌────────▼─────────┐
+                            │  Prefect worker   │
+                            │  (flows)          │
+                            └────────┬─────────┘
+                                     │ MP3
+                            ┌────────▼─────────┐
+                            │  Audiobookshelf   │
+                            │  (podcast)        │
+                            └──────────────────┘
+```
+
+- **Frontend** — static SPA served from CloudFront. Cognito Hosted UI handles login. Posts article URLs to API Gateway.
+- **API Gateway** — REST API with Cognito authorizer. Integrates directly with SQS (no Lambda).
+- **SQS** — job queue with DLQ. Consumed by the SQS bridge.
+- **Article SQS Bridge** — long-polls SQS for job messages, writes durable job directories. Runs in Docker.
+- **Prefect** — orchestrates pipeline flows (extract, chunk, TTS, merge, place). Runs in Docker.
+- **Fish TTS** — must be configured on the host separately from this repo. Reached from containers via `host.docker.internal:8888`.
+- **Audiobookshelf** — podcast library manager. MP3 episodes placed via host-mounted directory + API scan. Runs in Docker.
+
+## Services (Docker Compose — local dev)
+
+| Service | Port | Purpose |
+|---|---|---|
+| `article-sqs-bridge` | — | Long-polls SQS, writes job dirs |
+| `elasticmq` | 9324 | Local SQS-compatible queue |
+| `prefect-server` | 4200 | Prefect API + UI |
+| `prefect-worker` | — | Executes flow runs |
+| `prefect-bootstrap` | — | One-shot: creates work pool, registers deployments |
+| `audiobookshelf` | 13378 | Podcast library |
 
 ## Job directory layout
 
@@ -21,8 +65,6 @@ For each accepted SQS message, the bridge creates:
 - `<jobs_root>/<job_id>/chunks/`
 - `<jobs_root>/<job_id>/audio/`
 
-This keeps the durable local receipt marker in place before any later worker or Prefect flow takes over.
-
 ## Expected SQS payload
 
 ```json
@@ -32,6 +74,39 @@ This keeps the durable local receipt marker in place before any later worker or 
   "submitted_at": "2026-05-21T12:34:56Z"
 }
 ```
+
+## Frontend
+
+### Configuration
+
+Run the `build.sh -e <env> -s` script to build. Remove the `-s` option to also deploy everything to terraform.
+
+## Terraform
+
+```
+terraform/
+├── main.tf       # SQS queue + DLQ, API Gateway, Cognito User Pool
+├── variables.tf  # Region, queue name, allowed origins, etc.
+└── outputs.tf    # API endpoint, queue URL, Cognito domain & client ID
+```
+
+The Terraform provisions:
+
+- **Cognito User Pool** — user directory, Hosted UI domain, app client with implicit OAuth grant (openid scope).
+- **API Gateway** — REST API with `POST /submit`. Cognito authorizer validates the ID token. Integrates directly with SQS via AWS service integration (no Lambda).
+- **SQS Queue** — standard queue with DLQ. Receives messages from API Gateway.
+
+### Usage
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+After apply, set the output values in `frontend/config.js` and deploy the frontend to S3, CloudFront, or any static host.
+
+The `allowed_origins` variable controls the Cognito callback/logout URLs. Update it to match your frontend's deployed URL.
 
 ## Local setup
 
@@ -50,14 +125,6 @@ mkdir -p var/jobs
 docker compose up --build -d
 ```
 
-This starts:
-
-- `elasticmq` for local SQS-compatible testing
-- `article-sqs-bridge`
-- `prefect-server` on `http://localhost:4200`
-- `prefect-worker`
-- `prefect-bootstrap`, which creates the work pool and registers the demo deployment
-
 To watch logs:
 
 ```bash
@@ -70,19 +137,41 @@ To stop the stack:
 docker compose down
 ```
 
-The stack includes an ElasticMQ SQS-compatible endpoint, so it is testable without a real AWS queue.
+## Testing
 
-## Local verification
+### Manual Prefect flow runs
 
-Run a full smoke test against the local ElasticMQ queue:
+Trigger the URL-to-podcast pipeline:
+
+```bash
+./scripts/run-prefect-url-to-podcast.sh https://example.com/article
+```
+
+Trigger the article-to-podcast flow with raw text:
+
+```bash
+docker compose exec -T prefect-server \
+  env PREFECT_API_URL=http://prefect-server:4200/api \
+  python -m article_audio.prefect_flows run-article \
+  --text "$(cat article.txt)" --title "My Article"
+```
+
+Watch worker logs:
+
+```bash
+docker compose logs -f prefect-worker
+```
+
+Prefect UI at `http://localhost:4200`.
+
+### Local SQS verification
 
 ```bash
 mkdir -p var/jobs
 docker compose up --build -d
 ```
 
-Wait a few seconds for ElasticMQ to initialize, then enqueue a test message.
-The host-side `aws` CLI still needs dummy credentials even though this is not real AWS:
+Enqueue a test message:
 
 ```bash
 AWS_ACCESS_KEY_ID=test \
@@ -93,75 +182,20 @@ ARTICLE_AUDIO_QUEUE_URL=http://localhost:9324/queue/article-audio-jobs \
 ./scripts/send-test-job.sh
 ```
 
-Inspect the bridge output and generated job directories:
+Inspect results:
 
 ```bash
 docker compose logs -f article-sqs-bridge
-ls var/jobs
+ls var/jobs/<job-id>
 ```
 
-You should see log lines showing that the bridge received the SQS message, wrote the local job directory, and deleted the message after durable handoff.
-
-Inspect the generated files for a specific job:
+### Manual local run end-to-end
 
 ```bash
-JOB_ID="<job-id-from-send-test-job-or-var-jobs>"
-ls "var/jobs/$JOB_ID"
-sed -n '1,120p' "var/jobs/$JOB_ID/input.json"
-sed -n '1,120p' "var/jobs/$JOB_ID/received.json"
-sed -n '1,120p' "var/jobs/$JOB_ID/handoff.json"
-```
-
-You should see `input.json`, `received.json`, and `handoff.json` in that directory.
-
-When you are done:
-
-```bash
-docker compose down
-```
-
-If you want the bridge to hit real AWS instead, replace the values in `config/article-sqs-bridge.env` with your real queue URL and AWS settings.
-
-## Manual local run
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -e .
-source .venv/bin/activate
-article-sqs-bridge --once
-```
-
-## Host fish TTS bridge
-
-The bridge container adds `host.docker.internal` via Docker's `host-gateway` mapping.
-That gives future worker code a stable way to reach a fish TTS server running directly on the host machine, for example `http://host.docker.internal:8888`.
-
-## Prefect
-
-The local Prefect UI is available at `http://localhost:4200`.
-
-The Compose stack registers a demo deployment named `hello-world-tts/hello-world-tts`.
-It runs through the Prefect worker, calls the host fish server at `http://host.docker.internal:8888/v1/tts`, and writes the generated audio under `var/jobs/prefect-demo/`.
-
-Trigger the demo deployment from the repo root:
-
-```bash
-./scripts/run-prefect-hello-tts.sh
-```
-
-Or override the text:
-
-```bash
-./scripts/run-prefect-hello-tts.sh "Hello from Prefect and Fish Speech"
-```
-
-Watch the worker logs while the deployment runs:
-
-```bash
-docker compose logs -f prefect-worker prefect-bootstrap prefect-server
+uv run python article-sqs-bridge --once
 ```
 
 ## Notes
 
 - Invalid payloads or failed local handoffs are left on SQS for retry/DLQ handling.
-- The bridge currently stops at durable local handoff. Prefect worker integration is the next layer.
+- Assumes that self-hosted Fish TTS runs sequentially, one request at a time. Chunks are fed in one by one.
