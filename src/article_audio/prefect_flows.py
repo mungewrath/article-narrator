@@ -10,6 +10,7 @@ import ormsgpack
 import requests
 from prefect import flow, get_run_logger, task
 
+from article_audio import audio
 from article_audio.extractor import Article, fetch_article
 from article_audio.podcast import EpisodeResult, PodcastConfig, place_episode
 
@@ -40,10 +41,6 @@ def _fish_request_headers() -> dict[str, str]:
     return headers
 
 
-def _max_new_tokens() -> int:
-    return int(os.getenv("FISH_TTS_MAX_NEW_TOKENS", "4096"))
-
-
 def _fish_request_payload(text: str, audio_format: str) -> bytes:
     payload: dict[str, Any] = {
         "text": text,
@@ -51,7 +48,7 @@ def _fish_request_payload(text: str, audio_format: str) -> bytes:
         "reference_id": None,
         "format": audio_format,
         "latency": "normal",
-        "max_new_tokens": _max_new_tokens(),
+        "max_new_tokens": int(os.getenv("FISH_TTS_MAX_NEW_TOKENS", "4096")),
         "chunk_length": 200,
         "top_p": 0.8,
         "repetition_penalty": 1.1,
@@ -66,7 +63,7 @@ def _fish_request_payload(text: str, audio_format: str) -> bytes:
 @task
 def check_fish_tts_health() -> str:
     health_url = _fish_health_url()
-    response = requests.get(health_url, timeout=10)
+    response = requests.get(health_url, timeout=60)
     response.raise_for_status()
     return response.text
 
@@ -80,15 +77,7 @@ def synthesize_audio(text: str, title: str, audio_format: str = "mp3") -> str:
         "-"
     )[:80]
     output_path = output_dir / f"{slug}-{_utc_timestamp()}.{audio_format}"
-    response = requests.post(
-        _fish_tts_url(),
-        params={"format": "msgpack"},
-        data=_fish_request_payload(text, audio_format),
-        headers=_fish_request_headers(),
-        timeout=600,
-    )
-    response.raise_for_status()
-    output_path.write_bytes(response.content)
+    audio.synthesize_text(text, output_path)
     return str(output_path)
 
 
