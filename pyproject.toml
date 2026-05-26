@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "article-audio"
 version = "0.1.0"
-description = "Local article audio bridge and worker utilities"
+description = "Local Article Narrator bridge and worker utilities"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

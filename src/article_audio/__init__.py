@@ -1,1 +1,1 @@
-"""Article audio utilities."""
+"""Article Narrator utilities."""

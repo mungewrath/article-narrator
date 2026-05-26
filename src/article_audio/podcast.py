@@ -18,7 +18,7 @@ class PodcastConfig:
     library_id: str
     podcast_dir: Path
     podcast_name: str
-    podcast_author: str = "Article Audio Pipeline"
+    podcast_author: str = "Article Narrator Pipeline"
 
     @classmethod
     def from_env(cls) -> "PodcastConfig":
@@ -28,7 +28,7 @@ class PodcastConfig:
             library_id=os.getenv("ABS_LIBRARY_ID", "").strip(),
             podcast_dir=Path(os.getenv("ABS_PODCAST_DIR", "/podcasts")).resolve(),
             podcast_name=os.getenv("ABS_PODCAST_NAME", "articles"),
-            podcast_author=os.getenv("ABS_PODCAST_AUTHOR", "Article Audio Pipeline"),
+            podcast_author=os.getenv("ABS_PODCAST_AUTHOR", "Article Narrator Pipeline"),
         )
 
 
