@@ -11,3 +11,9 @@ __pycache__/
 var/
 
 config/*.local.env
+
+frontend/config.js
+frontend/.env.development
+frontend/.env.stage
+frontend/.env.prod
+frontend/dist/

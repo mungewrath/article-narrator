@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Article Narrator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="login-view" class="view hidden">
+      <div class="card card--center">
+        <h1>Article Narrator</h1>
+        <p class="subtitle">Submit articles for podcast generation</p>
+        <p id="login-error" class="error hidden"></p>
+        <button id="login-btn">Sign in</button>
+      </div>
+    </div>
+
+    <div id="dashboard-view" class="view hidden">
+      <header>
+        <h1>Article Narrator</h1>
+        <button id="logout-btn">Sign out</button>
+      </header>
+      <main>
+        <div class="card">
+          <h2>Submit a URL</h2>
+          <p class="subtitle">Paste a link to an article to generate a podcast episode.</p>
+          <form id="submit-form">
+            <label for="url-input">Article URL</label>
+            <input type="url" id="url-input" name="url" placeholder="https://example.com/article" required>
+            <p id="submit-error" class="error hidden"></p>
+            <p id="submit-success" class="success hidden"></p>
+            <button type="submit" id="submit-btn">Submit</button>
+          </form>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
