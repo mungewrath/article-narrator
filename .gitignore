@@ -17,3 +17,7 @@ frontend/.env.development
 frontend/.env.stage
 frontend/.env.prod
 frontend/dist/
+
+terraform/.terraform
+terraform/.terraform.lock*
+terraform/terraform.tfstate*

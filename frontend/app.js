@@ -15,7 +15,8 @@
   var submitBtn = document.getElementById("submit-btn");
 
   function getCurrentUrl() {
-    return window.location.protocol + "//" + window.location.host + window.location.pathname;
+    var path = window.location.pathname.replace(/\/$/, "");
+    return window.location.protocol + "//" + window.location.host + path;
   }
 
   function cognitoLoginUrl() {
