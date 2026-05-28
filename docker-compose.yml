@@ -30,13 +30,16 @@ services:
     container_name: article-sqs-bridge
     restart: unless-stopped
     depends_on:
-      - elasticmq
+      prefect-server:
+        condition: service_healthy
     env_file:
       - ./config/article-sqs-bridge.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    # TODO: Don't give access to the full AWS credentials folder, only a specific credentials file with limited permissions
     volumes:
       - ./var/jobs:/data/jobs
+      - ~/.aws:/root/.aws:ro
 
   prefect-server:
     build:

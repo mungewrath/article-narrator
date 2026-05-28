@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import shlex
@@ -71,8 +72,9 @@ class ArticleSqsBridge:
     def _handle_message(self, message: ReceivedMessage) -> None:
         LOGGER.info("Received SQS message %s", message.message_id)
         try:
-            payload = json.loads(message.body)
-            job = ArticleJob.from_payload(payload)
+            decoded_body = base64.b64decode(message.body).decode("utf-8")
+            body_as_json = json.loads(decoded_body)
+            job = ArticleJob.from_payload(body_as_json)
             job_dir = self._prepare_job_directory(job, message)
             self._durable_handoff(job, job_dir)
         except Exception:

@@ -120,7 +120,11 @@
         "Content-Type": "application/json",
         "Authorization": "Bearer " + token,
       },
-      body: JSON.stringify({ url: url }),
+      body: JSON.stringify({
+        url: url,
+        job_id: crypto.randomUUID(),
+        submitted_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      }),
     })
       .then(function (r) {
         if (!r.ok) return r.text().then(function (t) { throw new Error(t || r.statusText); });
