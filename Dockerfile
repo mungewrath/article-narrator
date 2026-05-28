@@ -8,11 +8,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
+RUN pip install uv && uv sync --no-install-project
+
 COPY src ./src
 
-RUN pip install --no-cache-dir .
+RUN uv sync
 
 COPY docker ./docker
 
+ENTRYPOINT ["uv", "run"]
 CMD ["article-sqs-bridge"]
