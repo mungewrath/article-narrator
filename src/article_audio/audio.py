@@ -6,8 +6,12 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import nltk
 import ormsgpack
 import requests
+
+nltk.download("punkt_tab", quiet=True)
+from nltk.tokenize import sent_tokenize
 
 
 def _fish_tts_url() -> str:
@@ -26,7 +30,8 @@ def _fish_request_payload(text: str) -> bytes:
     payload: dict[str, Any] = {
         "text": text,
         "references": [],
-        "reference_id": None,
+        # TODO: Make the reference list configurable based on frontend input
+        "reference_id": "tiernan",
         "format": "wav",
         "latency": "normal",
         "max_new_tokens": int(os.getenv("FISH_TTS_MAX_NEW_TOKENS", "4096")),
@@ -41,34 +46,28 @@ def _fish_request_payload(text: str) -> bytes:
     return ormsgpack.packb(payload)
 
 
-def _chunk_text(text: str, max_chars: int = 2000) -> list[str]:
-    # Split on double newlines first; fall back to single newlines; then sentences
-    raw_paras = text.split("\n\n")
-    if len(raw_paras) == 1:
-        raw_paras = text.split("\n")
-    if len(raw_paras) == 1:
-        import re
-
-        raw_paras = re.split(r"(?<=[.!?])\s+", text)
-
-    paragraphs = [p.strip() for p in raw_paras if p.strip()]
-    if not paragraphs:
+def _chunk_text(text: str, max_chars: int = 2000, max_sentences: int = 3) -> list[str]:
+    sentences = sent_tokenize(text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    if not sentences:
         return [text]
 
     chunks: list[str] = []
-    current: list[str] = []
-    current_len = 0
+    chunk_sentences: list[str] = []
+    chunk_length = 0
 
-    for para in paragraphs:
-        if current_len + len(para) > max_chars and current:
-            chunks.append("\n\n".join(current))
-            current = []
-            current_len = 0
-        current.append(para)
-        current_len += len(para)
+    for s in sentences:
+        if chunk_sentences and (
+            len(chunk_sentences) >= max_sentences or chunk_length + len(s) > max_chars
+        ):
+            chunks.append(" ".join(chunk_sentences))
+            chunk_sentences = []
+            chunk_length = 0
+        chunk_sentences.append(s)
+        chunk_length += len(s)
 
-    if current:
-        chunks.append("\n\n".join(current))
+    if chunk_sentences:
+        chunks.append(" ".join(chunk_sentences))
 
     return chunks
 
