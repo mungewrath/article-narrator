@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -149,14 +150,54 @@ def _wav_to_mp3(wav_data: bytes, output_path: Path) -> None:
         tmp_wav.unlink(missing_ok=True)
 
 
+def _generate_silence_wav(first_chunk: bytes, duration_ms: int = 150) -> bytes:
+    fmt_chunk_size = struct.unpack_from("<I", first_chunk, 16)[0]
+    audio_format = struct.unpack_from("<H", first_chunk, 20)[0]
+    channels = struct.unpack_from("<H", first_chunk, 22)[0]
+    sample_rate = struct.unpack_from("<I", first_chunk, 24)[0]
+    bits_per_sample = struct.unpack_from("<H", first_chunk, 34)[0]
+    byte_rate = sample_rate * channels * bits_per_sample // 8
+    block_align = channels * bits_per_sample // 8
+
+    num_samples = int(sample_rate * duration_ms / 1000)
+    data_size = num_samples * block_align
+    return (
+        struct.pack(
+            "<4sI4s4sIHHIIHH4sI",
+            b"RIFF",
+            36 + data_size,
+            b"WAVE",
+            b"fmt ",
+            fmt_chunk_size,
+            audio_format,
+            channels,
+            sample_rate,
+            byte_rate,
+            block_align,
+            bits_per_sample,
+            b"data",
+            data_size,
+        )
+        + b"\x00" * data_size
+    )
+
+
 def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
-    chunks = _chunk_text(text)
+    text_chunks = _chunk_text(text)
 
     wav_chunks: list[bytes] = []
-    for i, chunk in enumerate(chunks):
-        print(f"Synthesizing chunk {i + 1}/{len(chunks)} ({len(chunk)} chars)...")
+    for i, chunk in enumerate(text_chunks):
+        print(f"Synthesizing chunk {i + 1}/{len(text_chunks)} ({len(chunk)} chars)...")
         wav = _generate_chunk_wav(chunk, timeout=timeout)
         wav_chunks.append(wav)
+
+    if len(wav_chunks) > 1:
+        silence = _generate_silence_wav(wav_chunks[0])
+        padded: list[bytes] = [wav_chunks[0]]
+        for wav in wav_chunks[1:]:
+            padded.append(silence)
+            padded.append(wav)
+        wav_chunks = padded
 
     if output_path.suffix.lower() == ".wav":
         if len(wav_chunks) == 1:
