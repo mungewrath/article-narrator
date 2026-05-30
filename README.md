@@ -55,16 +55,6 @@ This repo contains:
 | `prefect-bootstrap` | — | One-shot: creates work pool, registers deployments |
 | `audiobookshelf` | 13378 | Podcast library |
 
-## Job directory layout
-
-For each accepted SQS message, the bridge creates:
-
-- `<jobs_root>/<job_id>/input.json`
-- `<jobs_root>/<job_id>/received.json`
-- `<jobs_root>/<job_id>/handoff.json`
-- `<jobs_root>/<job_id>/chunks/`
-- `<jobs_root>/<job_id>/audio/`
-
 ## Expected SQS payload
 
 ```json
@@ -74,12 +64,6 @@ For each accepted SQS message, the bridge creates:
   "submitted_at": "2026-05-21T12:34:56Z"
 }
 ```
-
-## Frontend
-
-### Configuration
-
-Run the `build.sh -e <env> -s` script to build. Remove the `-s` option to also deploy everything to terraform.
 
 ## Terraform
 
@@ -114,27 +98,19 @@ The `allowed_origins` variable controls the Cognito callback/logout URLs. Update
 cp config/article-sqs-bridge.env.example config/article-sqs-bridge.env
 cp config/prefect.env.example config/prefect.env
 mkdir -p var/jobs
+
+cd frontend/
+npm install
 ```
 
 Update the copied env files with real values before starting services.
 
-## Docker Compose
-
 ```bash
 mkdir -p var/jobs
+# Start the backend
 docker compose up --build -d
-```
-
-To watch logs:
-
-```bash
-docker compose logs -f article-sqs-bridge
-```
-
-To stop the stack:
-
-```bash
-docker compose down
+# Start the frontend (optional)
+npm run dev
 ```
 
 ## Testing
@@ -194,6 +170,16 @@ ls var/jobs/<job-id>
 ```bash
 uv run python article-sqs-bridge --once
 ```
+
+## Deployment
+
+This bundles all frontend content into a static asset, then deploys terraform:
+
+```bash
+frontend/build.sh -e <env>
+```
+
+Note that you can run `terraform plan` in the terraform/ directory to see the infra changes.
 
 ## Notes
 
