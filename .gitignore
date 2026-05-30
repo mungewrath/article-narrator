@@ -17,6 +17,11 @@ frontend/.env.development
 frontend/.env.stage
 frontend/.env.prod
 frontend/dist/
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+frontend/.env
+frontend/next-env.d.ts
 
 terraform/.terraform
 terraform/.terraform.lock*

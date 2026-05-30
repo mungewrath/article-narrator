@@ -25,7 +25,7 @@ variable "stage_name" {
 variable "allowed_origins" {
   description = "Allowed origins for Cognito redirect URIs (list of URLs)"
   type        = list(string)
-  default     = ["http://localhost:8080"]
+  default     = ["http://localhost:3000"]
 }
 
 variable "static_bucket_name" {

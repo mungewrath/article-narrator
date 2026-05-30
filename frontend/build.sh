@@ -31,20 +31,18 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
+set -a
 source "$ENV_FILE"
+set +a
 
-OUTPUT="dist"
-rm -rf "$OUTPUT"
-mkdir -p "$OUTPUT"
+npm ci
+npm run build
 
-envsubst < config.js.template > "$OUTPUT/config.js"
-
-cp index.html style.css app.js "$OUTPUT"
-
-echo "Built frontend for env=${ENV} → ${OUTPUT}/"
 echo ""
-echo "  API URL:        ${API_URL:-(not set)}"
-echo "  Cognito domain: ${COGNITO_DOMAIN:-(not set)}"
+echo "Built frontend for env=${ENV} → out/"
+echo ""
+echo "  API URL:        ${NEXT_PUBLIC_API_URL:-(not set)}"
+echo "  Cognito domain: ${NEXT_PUBLIC_COGNITO_DOMAIN:-(not set)}"
 
 if [ "$SKIP_DEPLOY" = false ]; then
   echo ""

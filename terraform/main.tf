@@ -90,12 +90,14 @@ resource "aws_cognito_user_pool_client" "frontend" {
   name                                 = "${var.api_name}-frontend"
   user_pool_id                         = aws_cognito_user_pool.main.id
   generate_secret                      = false
-  allowed_oauth_flows                  = ["implicit"]
+  allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["openid"]
   allowed_oauth_flows_user_pool_client = true
   callback_urls                        = concat(var.allowed_origins, ["https://${aws_cloudfront_distribution.main.domain_name}"])
   logout_urls                          = concat(var.allowed_origins, ["https://${aws_cloudfront_distribution.main.domain_name}"])
   supported_identity_providers         = ["COGNITO"]
+  explicit_auth_flows                  = ["ALLOW_REFRESH_TOKEN_AUTH"]
+  prevent_user_existence_errors        = "ENABLED"
 }
 
 resource "aws_api_gateway_rest_api" "main" {
@@ -317,13 +319,13 @@ resource "aws_s3_bucket_policy" "cloudfront" {
 }
 
 resource "aws_s3_object" "frontend" {
-  for_each = fileset("${path.module}/../frontend/dist", "**")
+  for_each = fileset("${path.module}/../frontend/out", "**")
 
   bucket       = data.aws_s3_bucket.static.bucket
   key          = each.value
-  source       = "${path.module}/../frontend/dist/${each.value}"
+  source       = "${path.module}/../frontend/out/${each.value}"
   content_type = lookup(local.content_type_map, reverse(split(".", each.value))[0], "text/html")
-  etag         = filemd5("${path.module}/../frontend/dist/${each.value}")
+  etag         = filemd5("${path.module}/../frontend/out/${each.value}")
 }
 
 # CloudFront distribution
