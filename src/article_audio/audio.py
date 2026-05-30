@@ -192,7 +192,7 @@ def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
         wav_chunks.append(wav)
 
     if len(wav_chunks) > 1:
-        silence = _generate_silence_wav(wav_chunks[0])
+        silence = _generate_silence_wav(wav_chunks[0], duration_ms=300)
         padded: list[bytes] = [wav_chunks[0]]
         for wav in wav_chunks[1:]:
             padded.append(silence)
