@@ -19,7 +19,12 @@ class Article:
 
     @property
     def description(self) -> str:
-        return f"Article from {self.url}"
+        parts = [f"Source: {self.url}"]
+        if self.author:
+            parts.append(f"Author: {self.author}")
+        if self.date:
+            parts.append(f"Date: {self.date}")
+        return " | ".join(parts)
 
 
 def _extract_title_from_html(html: str) -> str | None:
@@ -35,33 +40,57 @@ def _extract_title_from_html(html: str) -> str | None:
     return None
 
 
+def _parse_trafilatura_json(result: str, html: str) -> dict[str, Any]:
+    data = json.loads(result)
+    title = data.get("title") or _extract_title_from_html(html)
+    text = data.get("text") or ""
+    author = data.get("author")
+    date = data.get("date")
+
+    return {"title": title, "text": text, "author": author, "date": date}
+
+
+def _extract_with_trafilatura(
+    content: str | bytes,
+    html: str,
+) -> dict[str, Any] | None:
+    result = trafilatura.extract(
+        content,
+        include_formatting=False,
+        include_images=False,
+        include_links=False,
+        output_format="json",
+        with_metadata=True,
+    )
+    if result:
+        return _parse_trafilatura_json(result, html)
+    return None
+
+
 def fetch_article(url: str, timeout: int = 30) -> Article:
     resp = requests.get(url, timeout=timeout)
     resp.raise_for_status()
     html = resp.text
 
-    title = _extract_title_from_html(html)
+    extracted = _extract_with_trafilatura(html, html)
 
-    text = trafilatura.extract(
-        html,
-        include_formatting=False,
-        include_images=False,
-        include_links=False,
-        output_format="txt",
-    )
+    if not extracted:
+        extracted = _extract_with_trafilatura(resp.content, html)
 
-    if not text:
-        text = trafilatura.extract(
-            resp.content,
-            include_formatting=False,
-            include_images=False,
-            include_links=False,
-            output_format="txt",
-        )
+    if extracted:
+        title = extracted["title"]
+        text = extracted["text"]
+        author = extracted["author"]
+        date = extracted["date"]
+    else:
+        title = _extract_title_from_html(html)
+        text = ""
+        author = None
+        date = None
 
     if not title and text:
         first_line = text.split("\n")[0].strip()
         if first_line:
             title = first_line
 
-    return Article(url=url, title=title, text=text)
+    return Article(url=url, title=title, text=text, author=author, date=date)

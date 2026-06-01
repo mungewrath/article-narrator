@@ -12,7 +12,13 @@ from prefect import flow, get_run_logger, task
 
 from article_audio import audio
 from article_audio.extractor import Article, fetch_article
-from article_audio.podcast import EpisodeResult, PodcastConfig, place_episode
+from article_audio.podcast import (
+    EpisodeResult,
+    PodcastConfig,
+    place_episode,
+    update_episode_metadata,
+    wait_for_episode,
+)
 
 
 def _utc_timestamp() -> str:
@@ -139,6 +145,19 @@ def article_to_podcast(
         result.audio_path,
         result.episode_title,
     )
+
+    episode_ids = wait_for_episode(Path(result.audio_path).stem)
+    if episode_ids:
+        item_id, episode_id = episode_ids
+        update_episode_metadata(
+            item_id=item_id,
+            episode_id=episode_id,
+            title=title,
+            description=description,
+        )
+        logger.info("Updated episode metadata for: %s", title)
+    else:
+        logger.warning("Could not find episode in ABS to update metadata: %s", title)
 
     return {
         "status": "ok",

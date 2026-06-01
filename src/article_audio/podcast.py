@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -118,6 +119,34 @@ def get_podcast_item(cfg: PodcastConfig) -> dict[str, Any] | None:
     return None
 
 
+def wait_for_episode(
+    title: str,
+    cfg: PodcastConfig | None = None,
+    max_retries: int = 15,
+    retry_delay: float = 2.0,
+) -> tuple[str, str] | None:
+    if cfg is None:
+        cfg = PodcastConfig.from_env()
+
+    for _ in range(max_retries):
+        item = get_podcast_item(cfg)
+        if item:
+            item_id = item.get("id")
+            url = f"{cfg.api_base_url}/api/items/{item_id}"
+            print(f"Fetching item details: {repr(url)}")
+            resp = requests.get(url, headers=_headers(cfg), timeout=30)
+            print(f"GET response {resp.status_code} for {resp.url}")
+            resp.raise_for_status()
+            item_detail = resp.json()
+            media = item_detail.get("media", {}) or {}
+            for ep in media.get("episodes", []):
+                if isinstance(ep, dict) and ep.get("title") == title:
+                    return (item_id, ep.get("id"))
+        time.sleep(retry_delay)
+
+    return None
+
+
 def update_episode_metadata(
     item_id: str,
     episode_id: str,
@@ -129,14 +158,15 @@ def update_episode_metadata(
     if cfg is None:
         cfg = PodcastConfig.from_env()
 
-    url = f"{cfg.api_base_url}/api/items/{item_id}"
-    body: dict[str, Any] = {
-        "episodeId": episode_id,
-        "metadata": {"title": title, "description": description},
-    }
+    url = f"{cfg.api_base_url}/api/podcasts/{item_id}/episode/{episode_id}"
+    body: dict[str, Any] = {"title": title, "description": description}
+    
     if pub_date:
-        body["metadata"]["pubDate"] = pub_date
+        body["pubDate"] = pub_date
 
+    print(f"Patching episode metadata: {repr(url)}")
+    print(f"PATCH body: {json.dumps(body)}")
     resp = requests.patch(url, json=body, headers=_headers(cfg), timeout=30)
+    print(f"PATCH response {resp.status_code} for {resp.url}")
     resp.raise_for_status()
     return resp.json()
