@@ -48,27 +48,34 @@ def _fish_request_payload(text: str) -> bytes:
 
 
 def _chunk_text(text: str, max_chars: int = 2000, max_sentences: int = 3) -> list[str]:
-    sentences = sent_tokenize(text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    if not sentences:
+    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
+    if not paragraphs:
         return [text]
 
     chunks: list[str] = []
-    chunk_sentences: list[str] = []
-    chunk_length = 0
+    for para in paragraphs:
+        sentences = sent_tokenize(para)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        if not sentences:
+            chunks.append(para)
+            continue
 
-    for s in sentences:
-        if chunk_sentences and (
-            len(chunk_sentences) >= max_sentences or chunk_length + len(s) > max_chars
-        ):
+        chunk_sentences: list[str] = []
+        chunk_length = 0
+
+        for s in sentences:
+            if chunk_sentences and (
+                len(chunk_sentences) >= max_sentences
+                or chunk_length + len(s) > max_chars
+            ):
+                chunks.append(" ".join(chunk_sentences))
+                chunk_sentences = []
+                chunk_length = 0
+            chunk_sentences.append(s)
+            chunk_length += len(s)
+
+        if chunk_sentences:
             chunks.append(" ".join(chunk_sentences))
-            chunk_sentences = []
-            chunk_length = 0
-        chunk_sentences.append(s)
-        chunk_length += len(s)
-
-    if chunk_sentences:
-        chunks.append(" ".join(chunk_sentences))
 
     return chunks
 
@@ -188,11 +195,12 @@ def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
     wav_chunks: list[bytes] = []
     for i, chunk in enumerate(text_chunks):
         print(f"Synthesizing chunk {i + 1}/{len(text_chunks)} ({len(chunk)} chars)...")
+        print(f"Chunk text preview: {repr(chunk[:30])}...")
         wav = _generate_chunk_wav(chunk, timeout=timeout)
         wav_chunks.append(wav)
 
     if len(wav_chunks) > 1:
-        silence = _generate_silence_wav(wav_chunks[0], duration_ms=300)
+        silence = _generate_silence_wav(wav_chunks[0], duration_ms=500)
         padded: list[bytes] = [wav_chunks[0]]
         for wav in wav_chunks[1:]:
             padded.append(silence)
