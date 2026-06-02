@@ -56,6 +56,10 @@ services:
       - "4200"
     ports:
       - "4200:4200"
+    environment:
+      - PREFECT_HOME=/data/prefect
+    volumes:
+      - ./var/prefect:/data/prefect
     healthcheck:
       test:
         - CMD
