@@ -194,13 +194,15 @@ def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
 
     wav_chunks: list[bytes] = []
     for i, chunk in enumerate(text_chunks):
+        # Prevents anomalous TTS behavior when the chunk starts with a dash (e.g., "- Hello world")
+        chunk = chunk.lstrip("- ")
         print(f"Synthesizing chunk {i + 1}/{len(text_chunks)} ({len(chunk)} chars)...")
-        print(f"Chunk text preview: {repr(chunk[:30])}...")
+        print(f"Chunk text preview: {repr(chunk[:300])}...")
         wav = _generate_chunk_wav(chunk, timeout=timeout)
         wav_chunks.append(wav)
 
     if len(wav_chunks) > 1:
-        silence = _generate_silence_wav(wav_chunks[0], duration_ms=500)
+        silence = _generate_silence_wav(wav_chunks[0], duration_ms=400)
         padded: list[bytes] = [wav_chunks[0]]
         for wav in wav_chunks[1:]:
             padded.append(silence)
