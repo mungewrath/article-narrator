@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   CardContent,
+  InputAdornment,
   TextField,
   Typography,
   Alert,
@@ -18,6 +19,21 @@ export function SubmitForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [pasting, setPasting] = useState(false);
+
+  const handlePaste = async () => {
+    setError("");
+    setSuccess("");
+    setPasting(true);
+    try {
+      const text = await navigator.clipboard.readText();
+      setUrl(text);
+    } catch {
+      setError("Could not read from clipboard. Make sure you've allowed clipboard access.");
+    } finally {
+      setPasting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +107,20 @@ export function SubmitForm() {
               fullWidth
               size="small"
               sx={{ mb: 2 }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Button
+                      size="small"
+                      disabled={pasting}
+                      onClick={handlePaste}
+                      sx={{ minWidth: 0, p: "2px 6px", fontSize: "0.75rem" }}
+                    >
+                      {pasting ? "..." : "Paste"}
+                    </Button>
+                  </InputAdornment>
+                ),
+              }}
             />
             {error && (
               <Alert severity="error" sx={{ mb: 1.5, py: 0, fontSize: "0.85rem" }}>
