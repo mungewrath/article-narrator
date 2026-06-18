@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "boto3>=1.34.0",
+  "lxml>=5",
   "nltk>=3.9.4",
   "ormsgpack>=1.5.0",
   "prefect>=3.0,<4.0",
@@ -17,8 +18,17 @@ dependencies = [
   "trafilatura>=2.0.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=9"]
+
 [project.scripts]
 article-sqs-bridge = "article_audio.cli:main"
+
+[tool.pytest.ini_options]
+markers = [
+  "network: tests that make HTTP requests (skipped by default)",
+  "slow:   tests that are slower than usual (skipped by default)",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

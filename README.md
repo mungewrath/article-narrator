@@ -115,6 +115,19 @@ npm run dev
 
 ## Testing
 
+### Unit tests
+
+```bash
+uv sync --group dev
+uv run pytest tests/ -v
+```
+
+To include live URL smoke tests (hits real websites):
+
+```bash
+uv run pytest tests/ -v -m network
+```
+
 ### Manual Prefect flow runs
 
 Trigger the URL-to-podcast pipeline:
