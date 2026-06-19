@@ -30,12 +30,14 @@ class ArticleJob:
     job_id: str
     url: str
     submitted_at: str
+    voice: str = "tiernan"
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "ArticleJob":
         job_id = str(payload.get("job_id", "")).strip()
         url = str(payload.get("url", "")).strip()
         submitted_at = str(payload.get("submitted_at", "")).strip()
+        voice = str(payload.get("voice", "tiernan")).strip()
 
         if not job_id:
             raise ValueError("job_id is required")
@@ -53,7 +55,7 @@ class ArticleJob:
         if not submitted_at:
             raise ValueError("submitted_at is required")
 
-        return cls(job_id=job_id, url=url, submitted_at=submitted_at)
+        return cls(job_id=job_id, url=url, submitted_at=submitted_at, voice=voice)
 
     def input_document(self) -> dict[str, Any]:
         return asdict(self)

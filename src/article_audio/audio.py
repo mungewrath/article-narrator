@@ -27,12 +27,11 @@ def _fish_request_headers() -> dict[str, str]:
     return headers
 
 
-def _fish_request_payload(text: str) -> bytes:
+def _fish_request_payload(text: str, *, voice: str) -> bytes:
     payload: dict[str, Any] = {
         "text": text,
         "references": [],
-        # TODO: Make the reference list configurable based on frontend input
-        "reference_id": "tiernan",
+        "reference_id": voice,
         "format": "wav",
         "latency": "normal",
         "max_new_tokens": int(os.getenv("FISH_TTS_MAX_NEW_TOKENS", "4096")),
@@ -80,11 +79,11 @@ def _chunk_text(text: str, max_chars: int = 2000, max_sentences: int = 3) -> lis
     return chunks
 
 
-def _generate_chunk_wav(text: str, timeout: int = 300) -> bytes:
+def _generate_chunk_wav(text: str, *, voice: str, timeout: int = 300) -> bytes:
     resp = requests.post(
         _fish_tts_url(),
         params={"format": "msgpack"},
-        data=_fish_request_payload(text),
+        data=_fish_request_payload(text, voice=voice),
         headers=_fish_request_headers(),
         timeout=timeout,
     )
@@ -189,7 +188,13 @@ def _generate_silence_wav(first_chunk: bytes, duration_ms: int = 150) -> bytes:
     )
 
 
-def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
+def synthesize_text(
+    text: str,
+    output_path: Path,
+    *,
+    voice: str,
+    timeout: int = 300,
+) -> Path:
     text_chunks = _chunk_text(text)
 
     wav_chunks: list[bytes] = []
@@ -198,7 +203,7 @@ def synthesize_text(text: str, output_path: Path, timeout: int = 300) -> Path:
         chunk = chunk.lstrip("- ")
         print(f"Synthesizing chunk {i + 1}/{len(text_chunks)} ({len(chunk)} chars)...")
         print(f"Chunk text preview: {repr(chunk[:300])}...")
-        wav = _generate_chunk_wav(chunk, timeout=timeout)
+        wav = _generate_chunk_wav(chunk, timeout=timeout, voice=voice)
         wav_chunks.append(wav)
 
     if len(wav_chunks) > 1:

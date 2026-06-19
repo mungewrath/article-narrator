@@ -7,15 +7,26 @@ import {
   Button,
   Card,
   CardContent,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
   InputAdornment,
+  Radio,
+  RadioGroup,
   TextField,
   Typography,
   Alert,
 } from "@mui/material";
 
+const VOICES = [
+  { id: "tiernan", label: "Tiernan" },
+  { id: "alton", label: "Alton" },
+];
+
 export function SubmitForm() {
   const auth = useAuth();
   const [url, setUrl] = useState("");
+  const [voice, setVoice] = useState("tiernan");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +79,7 @@ export function SubmitForm() {
           url: trimmed,
           job_id: crypto.randomUUID(),
           submitted_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+          voice,
         }),
       });
 
@@ -122,6 +134,25 @@ export function SubmitForm() {
                 ),
               }}
             />
+            <FormControl sx={{ mb: 2 }}>
+              <FormLabel sx={{ fontSize: "0.875rem", color: "text.secondary" }}>
+                Voice
+              </FormLabel>
+              <RadioGroup
+                row
+                value={voice}
+                onChange={(e) => setVoice(e.target.value)}
+              >
+                {VOICES.map((v) => (
+                  <FormControlLabel
+                    key={v.id}
+                    value={v.id}
+                    control={<Radio size="small" />}
+                    label={v.label}
+                  />
+                ))}
+              </RadioGroup>
+            </FormControl>
             {error && (
               <Alert severity="error" sx={{ mb: 1.5, py: 0, fontSize: "0.85rem" }}>
                 {error}

@@ -126,6 +126,7 @@ class ArticleSqsBridge:
             "ARTICLE_JOB_ID": job.job_id,
             "ARTICLE_JOB_URL": job.url,
             "ARTICLE_JOB_SUBMITTED_AT": job.submitted_at,
+            "ARTICLE_JOB_VOICE": job.voice,
             "ARTICLE_JOB_DIR": str(job_dir),
         }
         LOGGER.info("Running handoff command for %s: %s", job.job_id, handoff_command)

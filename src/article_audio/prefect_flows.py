@@ -75,7 +75,13 @@ def check_fish_tts_health() -> str:
 
 
 @task
-def synthesize_audio(text: str, title: str, audio_format: str = "mp3") -> str:
+def synthesize_audio(
+    text: str,
+    title: str,
+    *,
+    voice: str,
+    audio_format: str = "mp3",
+) -> str:
     output_dir = _fish_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -83,7 +89,7 @@ def synthesize_audio(text: str, title: str, audio_format: str = "mp3") -> str:
         "-"
     )[:80]
     output_path = output_dir / f"{slug}-{_utc_timestamp()}.{audio_format}"
-    audio.synthesize_text(text, output_path)
+    audio.synthesize_text(text, output_path, voice=voice)
     return str(output_path)
 
 
@@ -125,6 +131,8 @@ def article_to_podcast(
     text: str,
     title: str = "Untitled Article",
     description: str = "",
+    *,
+    voice: str,
 ) -> dict[str, Any]:
     logger = get_run_logger()
     logger.info("Starting article-to-podcast for: %s", title)
@@ -132,7 +140,7 @@ def article_to_podcast(
     health = check_fish_tts_health()
     logger.info("Fish TTS health: %s", health)
 
-    audio_path = synthesize_audio(text, title)
+    audio_path = synthesize_audio(text, title, voice=voice)
     logger.info("Synthesized audio: %s", audio_path)
 
     result = place_episode(
@@ -174,7 +182,7 @@ def extract_article(url: str) -> Article:
 
 
 @flow(name="url-to-podcast", log_prints=True)
-def url_to_podcast(url: str) -> dict[str, Any]:
+def url_to_podcast(url: str, *, voice: str) -> dict[str, Any]:
     logger = get_run_logger()
     logger.info("Fetching article from: %s", url)
 
@@ -185,6 +193,7 @@ def url_to_podcast(url: str) -> dict[str, Any]:
         text=article.text or "",
         title=article.title or "Untitled Article",
         description=article.description,
+        voice=voice,
     )
 
 
@@ -250,15 +259,22 @@ def build_parser() -> argparse.ArgumentParser:
     run_article_parser.add_argument("--text", required=True)
     run_article_parser.add_argument("--title", default="Untitled Article")
     run_article_parser.add_argument("--description", default="")
+    run_article_parser.add_argument("--voice", default="tiernan")
     run_article_parser.set_defaults(
         handler=lambda args: article_to_podcast(
-            text=args.text, title=args.title, description=args.description
+            text=args.text,
+            title=args.title,
+            description=args.description,
+            voice=args.voice,
         )
     )
 
     run_url_parser = subparsers.add_parser("run-url")
     run_url_parser.add_argument("--url", required=True)
-    run_url_parser.set_defaults(handler=lambda args: url_to_podcast(url=args.url))
+    run_url_parser.add_argument("--voice", default="tiernan")
+    run_url_parser.set_defaults(
+        handler=lambda args: url_to_podcast(url=args.url, voice=args.voice)
+    )
     return parser
 
 
