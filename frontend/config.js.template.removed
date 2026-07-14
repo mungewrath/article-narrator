@@ -1,6 +1,0 @@
-var COGNITO = {
-  domain:   "${COGNITO_DOMAIN}",
-  clientId: "${COGNITO_CLIENT_ID}",
-  region:   "${COGNITO_REGION}",
-};
-var API_URL = "${API_URL}";

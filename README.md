@@ -88,7 +88,7 @@ terraform init
 terraform apply
 ```
 
-After apply, set the output values in `frontend/config.js` and deploy the frontend to S3, CloudFront, or any static host.
+After apply, update the Next.js `.env.*` files with the Terraform outputs.
 
 The `allowed_origins` variable controls the Cognito callback/logout URLs. Update it to match your frontend's deployed URL.
 
