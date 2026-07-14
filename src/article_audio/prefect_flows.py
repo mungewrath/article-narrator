@@ -182,8 +182,29 @@ def extract_article(url: str) -> Article:
 
 
 @flow(name="url-to-podcast", log_prints=True)
-def url_to_podcast(url: str, *, voice: str) -> dict[str, Any]:
+def url_to_podcast(
+    url: str = "",
+    *,
+    voice: str,
+    text: str = "",
+    title: str = "",
+) -> dict[str, Any]:
     logger = get_run_logger()
+
+    if text and text != "NULL":
+        article_title = title if title and title != "NULL" else "Pasted Article"
+        logger.info("Using pasted text (%d chars), title: %s", len(text), article_title)
+
+        return article_to_podcast(
+            text=text,
+            title=article_title,
+            description="Source: pasted text",
+            voice=voice,
+        )
+
+    if not url or url == "NULL":
+        raise ValueError("either url or text must be provided")
+
     logger.info("Fetching article from: %s", url)
 
     article = extract_article(url)
@@ -270,10 +291,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     run_url_parser = subparsers.add_parser("run-url")
-    run_url_parser.add_argument("--url", required=True)
+    run_url_parser.add_argument("--url", default="")
+    run_url_parser.add_argument("--text", default="")
+    run_url_parser.add_argument("--title", default="")
     run_url_parser.add_argument("--voice", default="tiernan")
     run_url_parser.set_defaults(
-        handler=lambda args: url_to_podcast(url=args.url, voice=args.voice)
+        handler=lambda args: url_to_podcast(
+            url=args.url,
+            voice=args.voice,
+            text=args.text,
+            title=args.title,
+        )
     )
     return parser
 

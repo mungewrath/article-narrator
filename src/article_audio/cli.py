@@ -34,8 +34,7 @@ def main() -> None:
             wait_time_seconds=config.wait_time_seconds,
             visibility_timeout=config.visibility_timeout,
             idle_sleep_seconds=config.idle_sleep_seconds,
-            handoff_command=config.handoff_command,
-            handoff_shell=config.handoff_shell,
+            prefect_deployment=config.prefect_deployment,
             log_level=config.log_level,
             once=True,
         )

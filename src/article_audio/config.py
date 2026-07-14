@@ -23,8 +23,7 @@ class BridgeConfig:
     wait_time_seconds: int
     visibility_timeout: int
     idle_sleep_seconds: float
-    handoff_command: str | None
-    handoff_shell: str
+    prefect_deployment: str | None
     log_level: str
     once: bool
 
@@ -54,9 +53,8 @@ class BridgeConfig:
             idle_sleep_seconds=float(
                 os.getenv("ARTICLE_AUDIO_IDLE_SLEEP_SECONDS", "2")
             ),
-            handoff_command=os.getenv("ARTICLE_AUDIO_HANDOFF_COMMAND", "").strip()
+            prefect_deployment=os.getenv("ARTICLE_AUDIO_PREFECT_DEPLOYMENT", "").strip()
             or None,
-            handoff_shell=os.getenv("ARTICLE_AUDIO_HANDOFF_SHELL", "/bin/bash"),
             log_level=os.getenv("ARTICLE_AUDIO_LOG_LEVEL", "INFO"),
             once=_env_bool("ARTICLE_AUDIO_RUN_ONCE", False),
         )

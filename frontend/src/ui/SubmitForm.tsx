@@ -5,15 +5,16 @@ import { useAuth } from "react-oidc-context";
 import {
   Box,
   Button,
+  ButtonGroup,
   Card,
   CardContent,
   FormControl,
   FormControlLabel,
   FormLabel,
-  InputAdornment,
   Radio,
   RadioGroup,
   TextField,
+  TextareaAutosize,
   Typography,
   Alert,
 } from "@mui/material";
@@ -23,9 +24,16 @@ const VOICES = [
   { id: "alton", label: "Alton" },
 ];
 
+type InputMode = "url" | "text";
+
+const TEXT_MAX_CHARS = 200000;
+
 export function SubmitForm() {
   const auth = useAuth();
+  const [mode, setMode] = useState<InputMode>("url");
   const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
   const [voice, setVoice] = useState("tiernan");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -37,10 +45,16 @@ export function SubmitForm() {
     setSuccess("");
     setPasting(true);
     try {
-      const text = await navigator.clipboard.readText();
-      setUrl(text);
+      const clipText = await navigator.clipboard.readText();
+      if (mode === "url") {
+        setUrl(clipText);
+      } else {
+        setText((prev) => prev + clipText);
+      }
     } catch {
-      setError("Could not read from clipboard. Make sure you've allowed clipboard access.");
+      setError(
+        "Could not read from clipboard. Make sure you've allowed clipboard access."
+      );
     } finally {
       setPasting(false);
     }
@@ -50,9 +64,6 @@ export function SubmitForm() {
     e.preventDefault();
     setError("");
     setSuccess("");
-
-    const trimmed = url.trim();
-    if (!trimmed) return;
 
     const token = auth.user?.id_token;
     if (!token) {
@@ -66,6 +77,33 @@ export function SubmitForm() {
       return;
     }
 
+    const basePayload = {
+      job_id: crypto.randomUUID(),
+      submitted_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      voice,
+    };
+
+    let payload: Record<string, string>;
+
+    if (mode === "url") {
+      const trimmed = url.trim();
+      if (!trimmed) return;
+      payload = { ...basePayload, url: trimmed };
+    } else {
+      const trimmedText = text.trim();
+      const trimmedTitle = title.trim();
+      if (!trimmedText) return;
+      if (!trimmedTitle) {
+        setError("Title is required when pasting text");
+        return;
+      }
+      if (trimmedText.length > TEXT_MAX_CHARS) {
+        setError(`Text exceeds maximum of ${TEXT_MAX_CHARS.toLocaleString()} characters`);
+        return;
+      }
+      payload = { ...basePayload, text: trimmedText, title: trimmedTitle };
+    }
+
     setSubmitting(true);
 
     try {
@@ -75,24 +113,23 @@ export function SubmitForm() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          url: trimmed,
-          job_id: crypto.randomUUID(),
-          submitted_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
-          voice,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || res.statusText);
+        const respText = await res.text();
+        throw new Error(respText || res.statusText);
       }
 
       await res.json();
       setSuccess("Submitted successfully. The article will be processed shortly.");
       setUrl("");
+      setText("");
+      setTitle("");
     } catch (err) {
-      setError(`Submission failed: ${err instanceof Error ? err.message : String(err)}`);
+      setError(
+        `Submission failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     } finally {
       setSubmitting(false);
     }
@@ -103,37 +140,120 @@ export function SubmitForm() {
       <Card sx={{ maxWidth: 480, width: "100%" }}>
         <CardContent sx={{ p: 3 }}>
           <Typography variant="h6" component="h2" gutterBottom>
-            Submit a URL
+            Submit an Article
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Paste a link to an article to generate a podcast episode.
+            Paste a link or raw text to generate a podcast episode.
           </Typography>
+
+          <ButtonGroup fullWidth sx={{ mb: 2 }} size="small">
+            <Button
+              variant={mode === "url" ? "contained" : "outlined"}
+              onClick={() => setMode("url")}
+            >
+              URL
+            </Button>
+            <Button
+              variant={mode === "text" ? "contained" : "outlined"}
+              onClick={() => setMode("text")}
+            >
+              Paste Text
+            </Button>
+          </ButtonGroup>
+
           <Box component="form" onSubmit={handleSubmit} noValidate>
-            <TextField
-              label="Article URL"
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://example.com/article"
-              required
-              fullWidth
-              size="small"
-              sx={{ mb: 2 }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
+            {mode === "url" ? (
+              <TextField
+                label="Article URL"
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com/article"
+                required
+                fullWidth
+                size="small"
+                sx={{ mb: 2 }}
+                InputProps={{
+                  endAdornment: (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        pr: 0.5,
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        disabled={pasting}
+                        onClick={handlePaste}
+                        sx={{ minWidth: 0, p: "2px 6px", fontSize: "0.75rem" }}
+                      >
+                        {pasting ? "..." : "Paste"}
+                      </Button>
+                    </Box>
+                  ),
+                }}
+              />
+            ) : (
+              <>
+                <TextField
+                  label="Title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Article title"
+                  required
+                  fullWidth
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <Box sx={{ mb: 2, position: "relative" }}>
+                  <TextareaAutosize
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Paste article text here..."
+                    minRows={6}
+                    maxRows={16}
+                    style={{
+                      width: "100%",
+                      padding: "12px",
+                      fontFamily: "inherit",
+                      fontSize: "0.875rem",
+                      lineHeight: 1.5,
+                      border: "1px solid rgba(0,0,0,0.23)",
+                      borderRadius: "4px",
+                      resize: "vertical",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      mt: 0.5,
+                    }}
+                  >
                     <Button
                       size="small"
                       disabled={pasting}
                       onClick={handlePaste}
                       sx={{ minWidth: 0, p: "2px 6px", fontSize: "0.75rem" }}
                     >
-                      {pasting ? "..." : "Paste"}
+                      {pasting ? "..." : "Paste from clipboard"}
                     </Button>
-                  </InputAdornment>
-                ),
-              }}
-            />
+                    <Typography
+                      variant="caption"
+                      color={
+                        text.length > TEXT_MAX_CHARS ? "error" : "text.secondary"
+                      }
+                    >
+                      {text.length.toLocaleString()} / {TEXT_MAX_CHARS.toLocaleString()}
+                    </Typography>
+                  </Box>
+                </Box>
+              </>
+            )}
+
             <FormControl sx={{ mb: 2 }}>
               <FormLabel sx={{ fontSize: "0.875rem", color: "text.secondary" }}>
                 Voice
@@ -159,7 +279,10 @@ export function SubmitForm() {
               </Alert>
             )}
             {success && (
-              <Alert severity="success" sx={{ mb: 1.5, py: 0, fontSize: "0.85rem" }}>
+              <Alert
+                severity="success"
+                sx={{ mb: 1.5, py: 0, fontSize: "0.85rem" }}
+              >
                 {success}
               </Alert>
             )}

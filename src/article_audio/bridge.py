@@ -3,14 +3,13 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import shlex
-import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import boto3
+from prefect.deployments import run_deployment
 
 from article_audio.config import BridgeConfig
 from article_audio.models import ArticleJob, JobStatus, utc_now_iso
@@ -77,8 +76,12 @@ class ArticleSqsBridge:
             job = ArticleJob.from_payload(body_as_json)
             job_dir = self._prepare_job_directory(job, message)
             self._durable_handoff(job, job_dir)
-        except Exception:
-            LOGGER.exception("Failed to process SQS message %s", message.message_id)
+        except Exception as e:
+            LOGGER.exception(
+                "Failed to process SQS message %s. Error message: %s",
+                message.message_id,
+                str(e),
+            )
             return
 
         self.sqs.delete_message(
@@ -105,14 +108,14 @@ class ArticleSqsBridge:
         return job_dir
 
     def _durable_handoff(self, job: ArticleJob, job_dir: Path) -> None:
-        handoff_command = self.config.handoff_command
-        if not handoff_command:
+        deployment_name = self.config.prefect_deployment
+        if not deployment_name:
             self._write_json(
                 job_dir / "handoff.json",
                 job.status_document(
                     JobStatus.RECEIVED,
                     handoff="local-only",
-                    note="No ARTICLE_AUDIO_HANDOFF_COMMAND configured",
+                    note="No ARTICLE_AUDIO_PREFECT_DEPLOYMENT configured",
                 ),
             )
             LOGGER.info(
@@ -121,52 +124,36 @@ class ArticleSqsBridge:
             )
             return
 
-        env = {
-            **self._stringified_env(),
-            "ARTICLE_JOB_ID": job.job_id,
-            "ARTICLE_JOB_URL": job.url,
-            "ARTICLE_JOB_SUBMITTED_AT": job.submitted_at,
-            "ARTICLE_JOB_VOICE": job.voice,
-            "ARTICLE_JOB_DIR": str(job_dir),
-        }
-        LOGGER.info("Running handoff command for %s: %s", job.job_id, handoff_command)
-        result = subprocess.run(
-            [self.config.handoff_shell, "-lc", handoff_command],
-            env=env,
-            capture_output=True,
-            text=True,
-            check=False,
+        parameters: dict[str, Any] = {"voice": job.voice}
+        if job.text:
+            parameters["text"] = job.text
+            parameters["title"] = job.title or "Pasted Article"
+        else:
+            parameters["url"] = job.url
+
+        LOGGER.info(
+            "Running prefect deployment %s for %s",
+            deployment_name,
+            job.job_id,
+        )
+        flow_run = run_deployment(
+            name=deployment_name,
+            parameters=parameters,
         )
 
         handoff_record = job.status_document(
             JobStatus.RECEIVED,
-            handoff="command",
-            command=handoff_command,
-            command_argv=shlex.split(handoff_command),
-            exit_code=result.returncode,
-            stdout=result.stdout,
-            stderr=result.stderr,
+            handoff="prefect",
+            deployment=deployment_name,
+            flow_run_id=str(flow_run.id),
         )
         self._write_json(job_dir / "handoff.json", handoff_record)
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"handoff command failed with exit code {result.returncode}"
-            )
 
     @staticmethod
     def _write_json(path: Path, document: dict[str, Any]) -> None:
         path.write_text(
             json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
-
-    @staticmethod
-    def _stringified_env() -> dict[str, str]:
-        import os
-
-        return {
-            key: value for key, value in os.environ.items() if isinstance(value, str)
-        }
 
 
 def configure_logging(level: str) -> None:

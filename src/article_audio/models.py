@@ -28,14 +28,21 @@ def utc_now_iso() -> str:
 @dataclass(frozen=True)
 class ArticleJob:
     job_id: str
-    url: str
+    url: str | None
     submitted_at: str
     voice: str = "tiernan"
+    text: str | None = None
+    title: str | None = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "ArticleJob":
         job_id = str(payload.get("job_id", "")).strip()
-        url = str(payload.get("url", "")).strip()
+        raw_url = payload.get("url")
+        url = str(raw_url).strip() if raw_url else None
+        raw_text = payload.get("text")
+        text = str(raw_text).strip() if raw_text else None
+        raw_title = payload.get("title")
+        title = str(raw_title).strip() if raw_title else None
         submitted_at = str(payload.get("submitted_at", "")).strip()
         voice = str(payload.get("voice", "tiernan")).strip()
 
@@ -46,16 +53,30 @@ class ArticleJob:
         except ValueError as exc:
             raise ValueError("job_id must be a UUID") from exc
 
-        if not url:
-            raise ValueError("url is required")
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("url must be an absolute http(s) URL")
+        if url and text:
+            raise ValueError("provide either url or text, not both")
+        if not url and not text:
+            raise ValueError("url or text is required")
+
+        if url:
+            parsed = urlparse(url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("url must be an absolute http(s) URL")
+
+        if text and not title:
+            raise ValueError("title is required when text is provided")
 
         if not submitted_at:
             raise ValueError("submitted_at is required")
 
-        return cls(job_id=job_id, url=url, submitted_at=submitted_at, voice=voice)
+        return cls(
+            job_id=job_id,
+            url=url,
+            submitted_at=submitted_at,
+            voice=voice,
+            text=text,
+            title=title,
+        )
 
     def input_document(self) -> dict[str, Any]:
         return asdict(self)
