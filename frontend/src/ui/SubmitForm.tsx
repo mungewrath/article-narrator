@@ -107,13 +107,15 @@ export function SubmitForm() {
     setSubmitting(true);
 
     try {
+      // Stringifying here before sending to API gateway prevents issues with  VTL mangling some utf-8 characters. Base64 is byte-safe.
+      const body = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
       const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "text/plain",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body,
       });
 
       if (!res.ok) {

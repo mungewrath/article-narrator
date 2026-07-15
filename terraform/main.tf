@@ -143,8 +143,8 @@ resource "aws_api_gateway_integration" "submit_post" {
   }
 
   request_templates = {
-    "application/json" = <<-EOT
-      Action=SendMessage&MessageBody=$util.base64Encode($input.json('$'))
+    "text/plain" = <<-EOT
+      Action=SendMessage&MessageBody=$util.urlEncode($input.body)
     EOT
   }
 }
